@@ -1,0 +1,12 @@
+{
+  "templates": {
+    "declaration_generator": "blob-10",
+    "build_template": "1.0.0"
+  },
+  "components": {
+    "authorization": "3.0.0"
+  },
+  "aiCoreVersion": "0.12.3",
+  "motokoVersion": "1.0.0-beta",
+  "coreLibVersion": "implicits-20"
+}

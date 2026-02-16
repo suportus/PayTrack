@@ -1,0 +1,21 @@
+{
+  "frontend/src/App.tsx": "Main application component with splash screen integration, authentication state management, user profile setup, view routing, and theme provider.",
+  "frontend/src/hooks/useQueries.ts": "Custom React Query hooks for all backend operations including user profile management, monthly records CRUD, payment operations (now without paymentType parameter as backend determines it automatically), checking for existing payments, and monthly record deletion with proper cache invalidation.",
+  "frontend/src/components/Header.tsx": "Fully responsive application header with mobile-optimized layout, branding, navigation controls, and user avatar dropdown menu.",
+  "frontend/src/components/Footer.tsx": "Responsive footer component with mobile-optimized text sizing and caffeine.ai attribution.",
+  "frontend/src/components/MonthlyOverview.tsx": "Fully responsive dashboard displaying monthly records in a mobile-friendly grid with touch-optimized cards, dialogs, and increased font size for the remaining amount text (text-base sm:text-lg) while maintaining the orange accent color.",
+  "frontend/src/components/MonthDetail.tsx": "Responsive detailed month view with mobile-optimized two-column layout that stacks on smaller screens, showing work information and payments with increased font size for the remaining amount text (text-base sm:text-lg) while maintaining the orange accent color.",
+  "frontend/src/components/Settings.tsx": "Responsive settings page with mobile-friendly form layout for configuring default hourly rate and transport allowance.",
+  "frontend/src/components/CreateMonthDialog.tsx": "Dialog form for creating new monthly records with month/year selection and work details, pre-filled with default values from user profile, fully translated to Slovenian.",
+  "frontend/src/components/EditMonthDialog.tsx": "Dialog form for editing existing monthly record work details (hours, rates, allowances), fully translated to Slovenian.",
+  "frontend/src/components/AddPaymentDialog.tsx": "Dialog form for adding new payments to a monthly record with automatic payment type preselection based on whether the month has existing payments (bank for first payment, cash for subsequent), with informative helper text and ability to override the default selection, fully translated to Slovenian.",
+  "frontend/src/index.css": "Global styles with OKLCH color system featuring a professional purple/indigo theme for both light and dark modes.",
+  "frontend/src/components/LoginScreen.tsx": "Responsive login interface with Internet Identity authentication and mobile-friendly card layout.",
+  "frontend/src/components/ProfileSetup.tsx": "User profile setup screen that prompts authenticated users to enter their name, default hourly rate, and default transport allowance on first login, displayed in Slovenian with EUR currency formatting.",
+  "frontend/index.html": "HTML entry point with PWA meta tags, corrected favicon paths using relative `./assets/...` format, and added 512x512 icon reference for comprehensive browser support.",
+  "frontend/public/manifest.json": "PWA manifest configuration with PayTrack branding in Slovenian, relative paths for all icons including 32x32, 192x192, 512x512, and 200x200 sizes, with `start_url` and `scope` set to `\"./\"` for proper PWA installation.",
+  "frontend/src/components/SplashScreen.tsx": "Animated splash screen component displaying PayTrack logo with gradient background and loading indicator.",
+  "frontend/src/service-worker.ts": "Service worker implementation for PWA offline caching with relative paths (`./`) for all cached resources, install, activate, and fetch event handlers with proper error handling.",
+  "frontend/src/main.tsx": "Application entry point with React root rendering, query client setup, Internet Identity provider, and service worker registration for PWA functionality using relative path `./service-worker.js` with proper scope configuration.",
+  "frontend/vite.config.js": "Vite configuration with React plugin, path aliases, proxy settings, and custom build configuration to output service worker as a separate entry point named 'service-worker.js'."
+}
