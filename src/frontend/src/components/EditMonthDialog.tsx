@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useCreateOrUpdateMonthlyRecord } from '../hooks/useQueries';
 import { toast } from 'sonner';
+import { amountErrorMessage } from '../lib/canisterEnv';
 import type { MonthlyRecord } from '../backend';
 
 interface EditMonthDialogProps {
@@ -63,7 +64,7 @@ export function EditMonthDialog({ open, onOpenChange, month, year, currentRecord
       toast.success('Mesečni zapis uspešno posodobljen');
       onOpenChange(false);
     } catch (error) {
-      toast.error('Napaka pri posodabljanju mesečnega zapisa');
+      toast.error(amountErrorMessage(error, 'Napaka pri posodabljanju mesečnega zapisa'));
     }
   };
 

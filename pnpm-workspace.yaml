@@ -1,4 +1,6 @@
 packages:
-    - src/**/*
-onlyBuiltDependencies:
-    - esbuild
+  - src/**/*
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true
+  sharp: false

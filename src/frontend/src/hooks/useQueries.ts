@@ -191,3 +191,16 @@ export function useDeleteMonthlyRecord() {
     },
   });
 }
+
+export function useGetCycleBalance(enabled: boolean) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<bigint>({
+    queryKey: ['cycleBalance'],
+    queryFn: async () => {
+      if (!actor) throw new Error('Actor not initialized');
+      return actor.getCycleBalance();
+    },
+    enabled: enabled && !!actor && !isFetching,
+  });
+}

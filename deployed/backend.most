@@ -1,0 +1,62 @@
+// Version: 1.0.0
+type Data__80296667<K, V> =
+  {var count : Nat__1040412405; kvs : [var ?(K, V)]};
+type Int__616954475 = Int;
+type Int__837511138 = Int__616954475;
+type Internal__41346355<K, V> =
+  {children : [var ?Node__1000929467<K, V>]; data : Data__80296667<K, V>};
+type Leaf__712614010<K, V> = {data : Data__80296667<K, V>};
+type Map__222667396<K, V> = Map__912772452<K, V>;
+type Map__709709801<K, V> =
+  {var root : Node__1000929467<K, V>; var size : Nat__1040412405};
+type Map__912772452<K, V> = Map__709709801<K, V>;
+type Month__783695157 = Nat;
+type MonthlyRecord__131605467 =
+  {
+    hourlyRateCents : Nat;
+    month : Month__783695157;
+    payments : [Payment__159206904];
+    totalDueCents : Nat;
+    transportAllowanceCents : Nat;
+    workedHours : Nat;
+    year : Year__632611693
+  };
+type Nat__1040412405 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__1000929467<K, V> =
+  {#internal : Internal__41346355<K, V>; #leaf : Leaf__712614010<K, V>};
+type PaymentType__236604515 = {#bank; #cash};
+type Payment__159206904 =
+  {
+    amountCents : Nat;
+    date : Time__688418391;
+    paymentType : PaymentType__236604515
+  };
+type Time__298180599 = Int__837511138;
+type Time__688418391 = Time__298180599;
+type UserProfile__491224006 =
+  {
+    defaultHourlyRateCents : Nat;
+    defaultTransportAllowanceCents : Nat;
+    name : Text
+  };
+type Year__632611693 = Nat;
+actor {
+  stable allowedUsers :
+    {
+      var root : Node__1000929467<Principal, Bool>;
+      var size : Nat__1040412405
+    };
+  stable userProfiles :
+    {
+      var root : Node__1000929467<Principal, UserProfile__491224006>;
+      var size : Nat__1040412405
+    };
+  stable userRecords :
+    {
+      var root :
+        Node__1000929467<Principal,
+                          Map__222667396<Text, MonthlyRecord__131605467>>;
+      var size : Nat__1040412405
+    }
+};

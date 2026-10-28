@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useCreateOrUpdateMonthlyRecord, useGetCallerUserProfile } from '../hooks/useQueries';
 import { toast } from 'sonner';
+import { amountErrorMessage } from '../lib/canisterEnv';
 
 interface CreateMonthDialogProps {
   open: boolean;
@@ -77,7 +78,7 @@ export function CreateMonthDialog({ open, onOpenChange }: CreateMonthDialogProps
       setWorkedHours('');
       setUseDefaults(true);
     } catch (error) {
-      toast.error('Napaka pri ustvarjanju mesečnega zapisa');
+      toast.error(amountErrorMessage(error, 'Napaka pri ustvarjanju mesečnega zapisa'));
     }
   };
 

@@ -8,28 +8,49 @@ import Nat "mo:core/Nat";
 import Time "mo:core/Time";
 import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
+import Cycles "mo:core/Cycles";
 
-import AccessControl "authorization/access-control";
+actor PayTrack {
+  // Only principals in this list may read or write data.
+  // The list is managed by a canister controller (your icp identity).
+  let allowedUsers = Map.empty<Principal, Bool>();
 
-actor {
-  // Initialize the access control system
-  let accessControlState = AccessControl.initState();
+  // ---------- Access control ----------
 
-  // Initialize auth (first caller becomes admin, others become users)
-  public shared ({ caller }) func initializeAccessControl() : async () {
-    AccessControl.initialize(accessControlState, caller);
+  func requireUser(caller : Principal) {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Anonymous access is not allowed");
+    };
+    if (not allowedUsers.containsKey(caller)) {
+      Runtime.trap("Access denied");
+    };
   };
 
-  public query ({ caller }) func getCallerUserRole() : async AccessControl.UserRole {
-    AccessControl.getUserRole(accessControlState, caller);
+  func requireController(caller : Principal) {
+    if (not caller.isController()) {
+      Runtime.trap("Only a canister controller can do this");
+    };
   };
 
-  public shared ({ caller }) func assignCallerUserRole(user : Principal, role : AccessControl.UserRole) : async () {
-    AccessControl.assignRole(accessControlState, caller, user, role);
+  public shared ({ caller }) func addUser(user : Principal) : async () {
+    requireController(caller);
+    allowedUsers.add(user, true);
   };
 
-  public query ({ caller }) func isCallerAdmin() : async Bool {
-    AccessControl.isAdmin(accessControlState, caller);
+  public shared ({ caller }) func removeUser(user : Principal) : async () {
+    requireController(caller);
+    allowedUsers.remove(user);
+  };
+
+  public shared ({ caller }) func listUsers() : async [Principal] {
+    requireController(caller);
+    allowedUsers.keys().toArray();
+  };
+
+  // Cycle balance of this (backend) canister, shown in the Cikli dialog.
+  public shared query ({ caller }) func getCycleBalance() : async Nat {
+    requireUser(caller);
+    Cycles.balance();
   };
 
   // PayTrack Application Code
@@ -83,23 +104,24 @@ actor {
   let userRecords = Map.empty<Principal, Map.Map<Text, MonthlyRecord>>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access profiles");
-    };
+    requireUser(caller);
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    // Your own profile, or any profile for a canister controller.
+    if (caller.isController()) {
+      return userProfiles.get(user);
+    };
+    requireUser(caller);
+    if (caller != user) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
+    requireUser(caller);
     userProfiles.add(caller, profile);
   };
 
@@ -123,6 +145,30 @@ actor {
     userRecords.add(caller, records);
   };
 
+  func totalPaidOf(record : MonthlyRecord) : Nat {
+    var totalPaid = 0;
+    for (payment in record.payments.values()) {
+      totalPaid += payment.amountCents;
+    };
+    totalPaid;
+  };
+
+  // addPayment and createOrUpdateMonthlyRecord keep total paid <= total due,
+  // so this never goes below zero; the check only guards against old data.
+  func remainingOf(record : MonthlyRecord) : Nat {
+    let totalPaid = totalPaidOf(record);
+    if (totalPaid >= record.totalDueCents) { 0 } else {
+      record.totalDueCents - totalPaid;
+    };
+  };
+
+  // Cents as Slovenian EUR text for error messages, e.g. 123456 -> "1234,56 €".
+  func formatEur(cents : Nat) : Text {
+    let rest = cents % 100;
+    let restText = if (rest < 10) { "0" # rest.toText() } else { rest.toText() };
+    (cents / 100).toText() # "," # restText # " €";
+  };
+
   public shared ({ caller }) func createOrUpdateMonthlyRecord(
     month : Month,
     year : Year,
@@ -130,9 +176,7 @@ actor {
     hourlyRateCents : ?Nat,
     transportAllowanceCents : ?Nat,
   ) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create or update monthly records");
-    };
+    requireUser(caller);
     let userProfile = getUserProfileInternal(caller);
     let recordId = month.toText() # "-" # year.toText();
 
@@ -151,7 +195,15 @@ actor {
 
     let payments = switch (userRecordsMap.get(recordId)) {
       case (null) { List.empty<Payment>().toArray() };
-      case (?existing) { existing.payments };
+      case (?existing) {
+        let totalPaid = totalPaidOf(existing);
+        if (totalDue < totalPaid) {
+          Runtime.trap(
+            "Skupni znesek (" # formatEur(totalDue) # ") ne sme biti manjši od že plačanega zneska (" # formatEur(totalPaid) # ")."
+          );
+        };
+        existing.payments;
+      };
     };
 
     let record : MonthlyRecord = {
@@ -169,15 +221,19 @@ actor {
   };
 
   public shared ({ caller }) func addPayment(month : Month, year : Year, amountCents : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add payments");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
 
     switch (userRecordsMap.get(recordId)) {
       case (null) { Runtime.trap("Monthly record does not exist") };
       case (?record) {
+        let remaining = remainingOf(record);
+        if (amountCents > remaining) {
+          Runtime.trap(
+            "Plačilo (" # formatEur(amountCents) # ") presega preostali znesek (" # formatEur(remaining) # ")."
+          );
+        };
         let paymentType = if (record.payments.size() == 0) { #bank } else { #cash };
         let payment : Payment = {
           date = Time.now();
@@ -205,9 +261,7 @@ actor {
   };
 
   public query ({ caller }) func getMonthlyRecord(month : Month, year : Year) : async MonthlyRecord {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access monthly records");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
     switch (userRecordsMap.get(recordId)) {
@@ -217,17 +271,13 @@ actor {
   };
 
   public query ({ caller }) func getAllRecords() : async [MonthlyRecord] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access records");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     userRecordsMap.values().toArray().sort(MonthlyRecord.compareByDate);
   };
 
   public query ({ caller }) func getPaymentsForMonth(month : Month, year : Year) : async [Payment] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access payments");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
     switch (userRecordsMap.get(recordId)) {
@@ -237,47 +287,31 @@ actor {
   };
 
   public query ({ caller }) func getSummary(month : Month, year : Year) : async (Nat, Nat, Nat) {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access summaries");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
     switch (userRecordsMap.get(recordId)) {
       case (null) { (0, 0, 0) };
       case (?record) {
-        var totalPaid = 0;
-        for (payment in record.payments.values()) {
-          totalPaid += payment.amountCents;
-        };
-        let remaining = record.totalDueCents - totalPaid;
-        (record.totalDueCents, totalPaid, remaining);
+        (record.totalDueCents, totalPaidOf(record), remainingOf(record));
       };
     };
   };
 
   public query ({ caller }) func getAllSummaries() : async [(Month, Year, Nat, Nat, Nat)] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access summaries");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let summaries = List.empty<(Month, Year, Nat, Nat, Nat)>();
 
     for (record in userRecordsMap.values()) {
-      var totalPaid = 0;
-      for (payment in record.payments.values()) {
-        totalPaid += payment.amountCents;
-      };
-      let remaining = record.totalDueCents - totalPaid;
-      summaries.add((record.month, record.year, record.totalDueCents, totalPaid, remaining));
+      summaries.add((record.month, record.year, record.totalDueCents, totalPaidOf(record), remainingOf(record)));
     };
 
     summaries.toArray();
   };
 
   public shared ({ caller }) func deletePayment(month : Month, year : Year, paymentDate : Time.Time) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete payments");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
     switch (userRecordsMap.get(recordId)) {
@@ -305,22 +339,14 @@ actor {
   };
 
   public shared ({ caller }) func deleteMonthlyRecord(month : Month, year : Year) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete monthly records");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
 
     switch (userRecordsMap.get(recordId)) {
       case (null) { Runtime.trap("Monthly record does not exist") };
       case (?record) {
-        var totalPaid = 0;
-        for (payment in record.payments.values()) {
-          totalPaid += payment.amountCents;
-        };
-        let remaining = record.totalDueCents - totalPaid;
-
-        if (remaining != 0) {
+        if (remainingOf(record) != 0) {
           Runtime.trap("Cannot delete a month with unpaid balance");
         };
 
@@ -331,9 +357,7 @@ actor {
   };
 
   public query ({ caller }) func hasExistingPayments(month : Month, year : Year) : async Bool {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access payment information");
-    };
+    requireUser(caller);
     let userRecordsMap = getUserRecords(caller);
     let recordId = month.toText() # "-" # year.toText();
     switch (userRecordsMap.get(recordId)) {

@@ -1,78 +1,45 @@
-import { useInternetIdentity } from './useInternetIdentity';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { type backendInterface } from '../backend';
-import { createActorWithConfig } from '../config';
-import { getSecretParameter } from '../utils/urlParams';
+import { HttpAgent } from "@icp-sdk/core/agent";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { type Backend, createActor } from "../backend";
+import { getCanisterEnv } from "../lib/canisterEnv";
+import { useInternetIdentity } from "./useInternetIdentity";
 
-interface ExtendedBackendInterface extends backendInterface {
-    initializeAccessControl: () => Promise<void>;
-}
+const ACTOR_QUERY_KEY = "actor";
 
-interface ExtendedBackendInterfaceWithSecret extends backendInterface {
-    _initializeAccessControlWithSecret: (userSecret: string) => Promise<void>;
-}
+export function useActor(): { actor: Backend | null; isFetching: boolean } {
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
 
-const ACTOR_QUERY_KEY = 'actor';
-export function useActor() {
-    const { identity } = useInternetIdentity();
-    const queryClient = useQueryClient();
-    const actorQuery = useQuery<backendInterface>({
-        queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
-        queryFn: async () => {
-            const isAuthenticated = !!identity;
+  const actorQuery = useQuery({
+    queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
+    queryFn: async () => {
+      const { backendId, rootKey } = getCanisterEnv();
+      if (!backendId) {
+        throw new Error(
+          "Backend canister ID not found (ic_env cookie missing). Open the app from the frontend canister URL.",
+        );
+      }
+      // No host: the agent uses the origin the page was served from.
+      const agent = await HttpAgent.create({ identity, rootKey });
+      return createActor(backendId, { agent });
+    },
+    // Only recreate the actor when the identity changes.
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
-            if (!isAuthenticated) {
-                // Return anonymous actor if not authenticated
-                return await createActorWithConfig();
-            }
+  // When the actor changes, refetch everything that depends on it.
+  useEffect(() => {
+    if (actorQuery.data) {
+      const predicate = (query: { queryKey: readonly unknown[] }) =>
+        !query.queryKey.includes(ACTOR_QUERY_KEY);
+      queryClient.invalidateQueries({ predicate });
+      queryClient.refetchQueries({ predicate });
+    }
+  }, [actorQuery.data, queryClient]);
 
-            const actorOptions = {
-                agentOptions: {
-                    identity
-                }
-            };
-
-            const actor = await createActorWithConfig(actorOptions);
-            // Check if initializeAccessControl exists and call it (some backends may not have this method)
-            if (
-                'initializeAccessControl' in actor &&
-                typeof (actor as ExtendedBackendInterface).initializeAccessControl === 'function'
-            ) {
-                await (actor as ExtendedBackendInterface).initializeAccessControl();
-            } else if (
-                '_initializeAccessControlWithSecret' in actor &&
-                typeof (actor as ExtendedBackendInterfaceWithSecret)._initializeAccessControlWithSecret === 'function'
-            ) {
-                const adminToken = getSecretParameter('caffeineAdminToken') || '';
-                await (actor as ExtendedBackendInterfaceWithSecret)._initializeAccessControlWithSecret(adminToken);
-            }
-            return actor;
-        },
-        // Only refetch when identity changes
-        staleTime: Infinity,
-        // This will cause the actor to be recreated when the identity changes
-        enabled: true
-    });
-
-    // When the actor changes, invalidate dependent queries
-    useEffect(() => {
-        if (actorQuery.data) {
-            queryClient.invalidateQueries({
-                predicate: (query) => {
-                    return !query.queryKey.includes(ACTOR_QUERY_KEY);
-                }
-            });
-            queryClient.refetchQueries({
-                predicate: (query) => {
-                    return !query.queryKey.includes(ACTOR_QUERY_KEY);
-                }
-            });
-        }
-    }, [actorQuery.data, queryClient]);
-
-    return {
-        actor: actorQuery.data || null,
-        isFetching: actorQuery.isFetching
-    };
+  return {
+    actor: actorQuery.data || null,
+    isFetching: actorQuery.isFetching,
+  };
 }

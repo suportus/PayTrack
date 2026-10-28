@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useAddPayment, useHasExistingPayments } from '../hooks/useQueries';
 import { toast } from 'sonner';
+import { amountErrorMessage } from '../lib/canisterEnv';
 
 interface AddPaymentDialogProps {
   open: boolean;
@@ -48,7 +49,7 @@ export function AddPaymentDialog({ open, onOpenChange, month, year }: AddPayment
       onOpenChange(false);
       setAmount('');
     } catch (error) {
-      toast.error('Napaka pri dodajanju plačila');
+      toast.error(amountErrorMessage(error, 'Napaka pri dodajanju plačila'));
     }
   };
 

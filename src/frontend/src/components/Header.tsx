@@ -1,9 +1,11 @@
-import { Settings as SettingsIcon, ArrowLeft, DollarSign, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Settings as SettingsIcon, ArrowLeft, DollarSign, Fuel, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useGetCallerUserProfile } from '../hooks/useQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { CyclesDialog } from './CyclesDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +23,7 @@ interface HeaderProps {
 
 export function Header({ currentView, onNavigateToSettings, onBackToOverview }: HeaderProps) {
   const { clear } = useInternetIdentity();
+  const [showCyclesDialog, setShowCyclesDialog] = useState(false);
   const { data: userProfile } = useGetCallerUserProfile();
   const queryClient = useQueryClient();
 
@@ -65,18 +68,6 @@ export function Header({ currentView, onNavigateToSettings, onBackToOverview }: 
         </div>
         
         <div className="flex items-center gap-1 sm:gap-2">
-          {currentView === 'overview' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onNavigateToSettings}
-              className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-            >
-              <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Nastavitve</span>
-            </Button>
-          )}
-          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 sm:h-9 sm:w-9">
@@ -99,6 +90,15 @@ export function Header({ currentView, onNavigateToSettings, onBackToOverview }: 
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onNavigateToSettings} className="cursor-pointer">
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                Privzete vrednosti
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCyclesDialog(true)} className="cursor-pointer">
+                <Fuel className="mr-2 h-4 w-4" />
+                Cycles
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Odjava
@@ -107,6 +107,7 @@ export function Header({ currentView, onNavigateToSettings, onBackToOverview }: 
           </DropdownMenu>
         </div>
       </div>
+      <CyclesDialog open={showCyclesDialog} onOpenChange={setShowCyclesDialog} />
     </header>
   );
 }
